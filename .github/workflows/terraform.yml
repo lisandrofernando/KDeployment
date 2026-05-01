@@ -66,9 +66,25 @@ jobs:
         run: terraform validate
         working-directory: ./terraform
 
-      - name: Import existing Resource Group
+      - name: Import existing resources if they exist
         run: |
-          terraform import azurerm_resource_group.rg /subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }} || true
+          # Import Resource Group if it exists
+          if az group show --name "${{ secrets.TF_RESOURCE_GROUP_NAME }}" &>/dev/null; then
+            echo "Resource group exists, importing..."
+            terraform import azurerm_resource_group.rg "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}" || echo "Import failed or already imported"
+          fi
+          
+          # Import ACR if it exists
+          if az acr show --name "${{ secrets.TF_ACR_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" &>/dev/null; then
+            echo "ACR exists, importing..."
+            terraform import azurerm_container_registry.acr "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerRegistry/registries/${{ secrets.TF_ACR_NAME }}" || echo "Import failed or already imported"
+          fi
+          
+          # Import AKS if it exists
+          if az aks show --name "${{ secrets.TF_CLUSTER_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" &>/dev/null; then
+            echo "AKS cluster exists, importing..."
+            terraform import azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerService/managedClusters/${{ secrets.TF_CLUSTER_NAME }}" || echo "Import failed or already imported"
+          fi
         working-directory: ./terraform
 
       - name: Terraform Plan
