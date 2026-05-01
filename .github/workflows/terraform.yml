@@ -10,6 +10,12 @@ on:
     paths:
       - "terraform/**"
   workflow_dispatch:
+    inputs:
+      force_failure:
+        description: 'Force pipeline to fail for testing'
+        required: false
+        default: false
+        type: boolean
 
 env:
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -24,6 +30,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Force Failure (if requested)
+        if: ${{ github.event.inputs.force_failure == 'true' }}
+        run: |
+          echo "Pipeline failure requested manually"
+          exit 1
 
       - name: Azure Login
         uses: azure/login@v2
