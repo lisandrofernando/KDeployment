@@ -13,10 +13,10 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
+  ACR_NAME: ${{ secrets.TF_ACR_NAME || secrets.ACR_NAME }}
   IMAGE_NAME: my-app
-  CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
-  RESOURCE_GROUP: ${{ secrets.AKS_RESOURCE_GROUP }}
+  CLUSTER_NAME: ${{ secrets.TF_CLUSTER_NAME || secrets.AKS_CLUSTER_NAME }}
+  RESOURCE_GROUP: ${{ secrets.TF_RESOURCE_GROUP_NAME || secrets.AKS_RESOURCE_GROUP }}
 
 jobs:
   build:
@@ -40,6 +40,39 @@ jobs:
               "tenantId": "${{ secrets.ARM_TENANT_ID }}",
               "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}"
             }
+
+      - name: Setup ACR Access
+        run: |
+          echo "Setting up ACR access..."
+          
+          # Get ACR name from Terraform secrets or fallback to ACR_NAME
+          ACR_NAME="${{ secrets.TF_ACR_NAME }}"
+          if [ -z "$ACR_NAME" ]; then
+            ACR_NAME="${{ secrets.ACR_NAME }}"
+          fi
+          
+          echo "Using ACR: $ACR_NAME"
+          
+          # Check if ACR exists and we have access
+          if az acr show --name "$ACR_NAME" >/dev/null 2>&1; then
+            echo "✓ ACR exists and accessible"
+            
+            # Try to assign AcrPush role to the service principal for pushing images
+            SP_OBJECT_ID=$(az ad sp show --id "${{ secrets.ARM_CLIENT_ID }}" --query id --output tsv)
+            ACR_ID=$(az acr show --name "$ACR_NAME" --query id --output tsv)
+            
+            echo "Assigning AcrPush role to service principal..."
+            az role assignment create \
+              --assignee "$SP_OBJECT_ID" \
+              --role "AcrPush" \
+              --scope "$ACR_ID" || echo "Role assignment failed - may already exist"
+              
+            # Set ACR name for subsequent steps
+            echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
+          else
+            echo "❌ Cannot access ACR: $ACR_NAME"
+            exit 1
+          fi
 
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
