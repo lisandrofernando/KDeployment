@@ -118,24 +118,32 @@ jobs:
         run: |
           sed -i "s|ACR_LOGIN_SERVER|${{ needs.build.outputs.acr_login_server }}|g" k8s/deployment.yaml
           sed -i "s|IMAGE_TAG|${{ needs.build.outputs.image_tag }}|g" k8s/deployment.yaml
+          echo "📋 Final deployment manifest:"
           cat k8s/deployment.yaml
+          echo "🚀 Applying deployment..."
           kubectl apply -f k8s/deployment.yaml
+          
+          echo "⏳ Waiting for deployment to be ready..."
+          kubectl rollout status deployment/my-app --timeout=300s
+
+      - name: Debug Deployment Issues
+        if: failure()
+        run: |
+          echo "🔍 Debugging deployment issues..."
+          echo "📊 Deployment status:"
+          kubectl get deployment my-app -o wide
+          echo "📦 Pod status:"
+          kubectl get pods -l app=my-app -o wide
+          echo "📋 Pod descriptions:"
+          kubectl describe pods -l app=my-app
+          echo "📝 Pod logs:"
+          kubectl logs -l app=my-app --tail=100 || echo "No logs available"
+          echo "🔧 Events:"
+          kubectl get events --sort-by=.metadata.creationTimestamp
 
       - name: Verify Deployment
         run: |
-          echo "🔄 Restarting deployment..."
-          kubectl rollout restart deployment/my-app
-          echo "⏳ Waiting for rollout to complete..."
-          kubectl rollout status deployment/my-app --timeout=300s
-          
-          echo "📊 Checking deployment status..."
+          echo "✅ Deployment completed successfully!"
           kubectl get deployment my-app
           kubectl get pods -l app=my-app
-          
-          echo "🔍 Checking pod logs for any issues..."
-          kubectl logs -l app=my-app --tail=50 || echo "No logs available yet"
-          
-          echo "📋 Describing pods for troubleshooting..."
-          kubectl describe pods -l app=my-app
-          
-          echo "✅ Deployment verification complete!"
+          kubectl get service my-app
