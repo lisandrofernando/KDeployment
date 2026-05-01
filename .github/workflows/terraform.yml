@@ -16,6 +16,11 @@ on:
         required: false
         default: false
         type: boolean
+      destroy_resources:
+        description: 'Destroy all Azure resources (CAUTION: This will delete everything!)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -194,7 +199,7 @@ jobs:
         working-directory: ./terraform
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && github.event.inputs.destroy_resources != 'true' }}
         run: |
           # Try to apply, but handle role assignment failures gracefully
           if terraform apply -auto-approve \
@@ -234,4 +239,32 @@ jobs:
             
             echo "Infrastructure deployment completed with warnings. Role assignment may need manual intervention."
           fi
+        working-directory: ./terraform
+
+      - name: Terraform Destroy
+        if: ${{ github.event.inputs.destroy_resources == 'true' }}
+        run: |
+          echo "⚠️  WARNING: Destroying all Azure resources!"
+          echo "This will delete:"
+          echo "- AKS Cluster: ${{ secrets.TF_CLUSTER_NAME }}"
+          echo "- ACR: ${{ secrets.TF_ACR_NAME }}"
+          echo "- Resource Group: ${{ secrets.TF_RESOURCE_GROUP_NAME }}"
+          echo "- All associated resources"
+          
+          terraform destroy -auto-approve \
+            -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
+            -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
+            -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
+            -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}" \
+            -var="resource_group_name=${{ secrets.TF_RESOURCE_GROUP_NAME }}" \
+            -var="location=${{ secrets.TF_LOCATION }}" \
+            -var="cluster_name=${{ secrets.TF_CLUSTER_NAME }}" \
+            -var="acr_name=${{ secrets.TF_ACR_NAME }}" \
+            -var="kubernetes_version=${{ secrets.TF_KUBERNETES_VERSION }}" \
+            -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
+            -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
+            -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
+            -var='tags=${{ secrets.TF_TAGS }}'
+          
+          echo "🗑️  All Azure resources have been destroyed!"
         working-directory: ./terraform
