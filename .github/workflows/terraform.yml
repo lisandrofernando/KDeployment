@@ -124,8 +124,9 @@ jobs:
           echo "\n=== Checking other resources ==="
           
           # Check ACR
+          echo "Checking if ACR exists: ${{ secrets.TF_ACR_NAME }}"
           if az acr show --name "${{ secrets.TF_ACR_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" >/dev/null 2>&1; then
-            echo "ACR exists, importing..."
+            echo "ACR exists in resource group, importing..."
             ACR_ID="/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerRegistry/registries/${{ secrets.TF_ACR_NAME }}"
             terraform import -input=false \
               -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
@@ -141,7 +142,12 @@ jobs:
               -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
               -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
               -var='tags=${{ secrets.TF_TAGS }}' \
-              azurerm_container_registry.acr "$ACR_ID" || echo "ACR import failed"
+              azurerm_container_registry.acr "$ACR_ID" && echo "✓ ACR imported successfully" || echo "✗ ACR import failed"
+          elif az acr show --name "${{ secrets.TF_ACR_NAME }}" >/dev/null 2>&1; then
+            echo "⚠ ACR name '${{ secrets.TF_ACR_NAME }}' exists globally but not in your resource group"
+            echo "This will cause a naming conflict. Consider using a different ACR name."
+          else
+            echo "ACR does not exist, will be created"
           fi
           
           # Check AKS
