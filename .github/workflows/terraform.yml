@@ -66,57 +66,46 @@ jobs:
         run: terraform validate
         working-directory: ./terraform
 
-      - name: Handle existing resources
+      - name: Import existing Azure resources
         run: |
-          echo "=== Handling existing resources ==="
+          echo "=== Importing existing Azure resources ==="
           
-          # Try to run terraform plan first to see what happens
-          echo "Running initial plan to check for conflicts..."
-          if terraform plan \
-            -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
-            -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
-            -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
-            -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}" \
-            -var="resource_group_name=${{ secrets.TF_RESOURCE_GROUP_NAME }}" \
-            -var="location=${{ secrets.TF_LOCATION }}" \
-            -var="cluster_name=${{ secrets.TF_CLUSTER_NAME }}" \
-            -var="acr_name=${{ secrets.TF_ACR_NAME }}" \
-            -var="kubernetes_version=${{ secrets.TF_KUBERNETES_VERSION }}" \
-            -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
-            -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
-            -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
-            -var='tags=${{ secrets.TF_TAGS }}' 2>&1 | tee plan_output.txt; then
-            echo "✓ Plan succeeded - no conflicts"
+          # Set subscription context
+          az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
+          
+          # Always try to import the resource group since we know it exists
+          echo "Attempting to import resource group: ${{ secrets.TF_RESOURCE_GROUP_NAME }}"
+          terraform import azurerm_resource_group.rg "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}" || {
+            echo "Resource group import failed - may already be imported or doesn't exist"
+          }
+          
+          # Try to import ACR if it exists
+          echo "Checking if ACR exists: ${{ secrets.TF_ACR_NAME }}"
+          if az acr show --name "${{ secrets.TF_ACR_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" >/dev/null 2>&1; then
+            echo "ACR exists, importing..."
+            terraform import azurerm_container_registry.acr "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerRegistry/registries/${{ secrets.TF_ACR_NAME }}" || {
+              echo "ACR import failed - may already be imported"
+            }
           else
-            echo "⚠ Plan failed - checking for import conflicts"
-            if grep -q "already exists" plan_output.txt; then
-              echo "Found 'already exists' error - attempting imports"
-              
-              # Import Resource Group
-              if grep -q "azurerm_resource_group" plan_output.txt; then
-                echo "Importing resource group..."
-                terraform import azurerm_resource_group.rg "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}" || echo "RG import failed"
-              fi
-              
-              # Import ACR if mentioned in error
-              if grep -q "azurerm_container_registry" plan_output.txt; then
-                echo "Importing ACR..."
-                terraform import azurerm_container_registry.acr "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerRegistry/registries/${{ secrets.TF_ACR_NAME }}" || echo "ACR import failed"
-              fi
-              
-              # Import AKS if mentioned in error
-              if grep -q "azurerm_kubernetes_cluster" plan_output.txt; then
-                echo "Importing AKS..."
-                terraform import azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerService/managedClusters/${{ secrets.TF_CLUSTER_NAME }}" || echo "AKS import failed"
-              fi
-            fi
+            echo "ACR does not exist, will be created"
           fi
           
-          echo "Final state:"
-          terraform state list
+          # Try to import AKS if it exists
+          echo "Checking if AKS exists: ${{ secrets.TF_CLUSTER_NAME }}"
+          if az aks show --name "${{ secrets.TF_CLUSTER_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" >/dev/null 2>&1; then
+            echo "AKS exists, importing..."
+            terraform import azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerService/managedClusters/${{ secrets.TF_CLUSTER_NAME }}" || {
+              echo "AKS import failed - may already be imported"
+            }
+          else
+            echo "AKS does not exist, will be created"
+          fi
+          
+          echo "\nCurrent Terraform state after imports:"
+          terraform state list || echo "No resources in state"
         working-directory: ./terraform
 
-      - name: Terraform Plan (Final)
+      - name: Terraform Plan
         run: |
           terraform plan \
             -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
