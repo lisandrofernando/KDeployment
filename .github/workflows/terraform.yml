@@ -78,7 +78,7 @@ jobs:
           echo "\nCurrent Terraform state before import:"
           terraform state list || echo "No resources in state yet"
           
-          # Import resource group with detailed logging
+          # Import resource group with all required variables
           echo "\n=== Importing Resource Group ==="
           RG_ID="/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}"
           echo "Resource Group ID: $RG_ID"
@@ -88,9 +88,23 @@ jobs:
           if az group show --name "${{ secrets.TF_RESOURCE_GROUP_NAME }}" --output table; then
             echo "✓ Resource group exists in Azure"
             
-            # Attempt import with verbose output
-            echo "Attempting import..."
-            if terraform import -input=false azurerm_resource_group.rg "$RG_ID"; then
+            # Attempt import with all required variables
+            echo "Attempting import with variables..."
+            if terraform import -input=false \
+              -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
+              -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
+              -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
+              -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}" \
+              -var="resource_group_name=${{ secrets.TF_RESOURCE_GROUP_NAME }}" \
+              -var="location=${{ secrets.TF_LOCATION }}" \
+              -var="cluster_name=${{ secrets.TF_CLUSTER_NAME }}" \
+              -var="acr_name=${{ secrets.TF_ACR_NAME }}" \
+              -var="kubernetes_version=${{ secrets.TF_KUBERNETES_VERSION }}" \
+              -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
+              -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
+              -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
+              -var='tags=${{ secrets.TF_TAGS }}' \
+              azurerm_resource_group.rg "$RG_ID"; then
               echo "✓ Resource group imported successfully"
             else
               echo "✗ Resource group import failed"
@@ -113,14 +127,42 @@ jobs:
           if az acr show --name "${{ secrets.TF_ACR_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" >/dev/null 2>&1; then
             echo "ACR exists, importing..."
             ACR_ID="/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerRegistry/registries/${{ secrets.TF_ACR_NAME }}"
-            terraform import -input=false azurerm_container_registry.acr "$ACR_ID" || echo "ACR import failed"
+            terraform import -input=false \
+              -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
+              -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
+              -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
+              -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}" \
+              -var="resource_group_name=${{ secrets.TF_RESOURCE_GROUP_NAME }}" \
+              -var="location=${{ secrets.TF_LOCATION }}" \
+              -var="cluster_name=${{ secrets.TF_CLUSTER_NAME }}" \
+              -var="acr_name=${{ secrets.TF_ACR_NAME }}" \
+              -var="kubernetes_version=${{ secrets.TF_KUBERNETES_VERSION }}" \
+              -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
+              -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
+              -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
+              -var='tags=${{ secrets.TF_TAGS }}' \
+              azurerm_container_registry.acr "$ACR_ID" || echo "ACR import failed"
           fi
           
           # Check AKS
           if az aks show --name "${{ secrets.TF_CLUSTER_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" >/dev/null 2>&1; then
             echo "AKS exists, importing..."
             AKS_ID="/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }}/providers/Microsoft.ContainerService/managedClusters/${{ secrets.TF_CLUSTER_NAME }}"
-            terraform import -input=false azurerm_kubernetes_cluster.aks "$AKS_ID" || echo "AKS import failed"
+            terraform import -input=false \
+              -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
+              -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
+              -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
+              -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}" \
+              -var="resource_group_name=${{ secrets.TF_RESOURCE_GROUP_NAME }}" \
+              -var="location=${{ secrets.TF_LOCATION }}" \
+              -var="cluster_name=${{ secrets.TF_CLUSTER_NAME }}" \
+              -var="acr_name=${{ secrets.TF_ACR_NAME }}" \
+              -var="kubernetes_version=${{ secrets.TF_KUBERNETES_VERSION }}" \
+              -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
+              -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
+              -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
+              -var='tags=${{ secrets.TF_TAGS }}' \
+              azurerm_kubernetes_cluster.aks "$AKS_ID" || echo "AKS import failed"
           fi
           
           echo "\nFinal Terraform state after all imports:"
