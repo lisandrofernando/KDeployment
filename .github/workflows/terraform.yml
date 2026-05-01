@@ -73,7 +73,7 @@ jobs:
         working-directory: ./terraform
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
           terraform apply -auto-approve \
             -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \

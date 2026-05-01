@@ -2,14 +2,14 @@ name: App - Build & Deploy to AKS
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "app/**"
       - "k8s/**"
   workflow_run:
     workflows: ["Terraform - Provision Infrastructure"]
     types: [completed]
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 env:
