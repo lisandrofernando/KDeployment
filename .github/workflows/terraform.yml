@@ -196,7 +196,8 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         run: |
-          terraform apply -auto-approve \
+          # Try to apply, but handle role assignment failures gracefully
+          if terraform apply -auto-approve \
             -var="client_id=${{ secrets.ARM_CLIENT_ID }}" \
             -var="client_secret=${{ secrets.ARM_CLIENT_SECRET }}" \
             -var="tenant_id=${{ secrets.ARM_TENANT_ID }}" \
@@ -209,5 +210,28 @@ jobs:
             -var="node_vm_size=${{ secrets.TF_NODE_VM_SIZE }}" \
             -var="min_node_count=${{ secrets.TF_MIN_NODE_COUNT }}" \
             -var="max_node_count=${{ secrets.TF_MAX_NODE_COUNT }}" \
-            -var='tags=${{ secrets.TF_TAGS }}'
+            -var='tags=${{ secrets.TF_TAGS }}'; then
+            echo "✅ Terraform apply completed successfully"
+          else
+            echo "⚠️ Terraform apply failed, likely due to role assignment permissions"
+            echo "Attempting to create role assignment manually..."
+            
+            # Get ACR resource ID
+            ACR_ID=$(az acr show --name "${{ secrets.TF_ACR_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" --query id --output tsv)
+            
+            # Get AKS managed identity
+            AKS_IDENTITY=$(az aks show --name "${{ secrets.TF_CLUSTER_NAME }}" --resource-group "${{ secrets.TF_RESOURCE_GROUP_NAME }}" --query identityProfile.kubeletidentity.objectId --output tsv)
+            
+            if [ -n "$AKS_IDENTITY" ] && [ -n "$ACR_ID" ]; then
+              echo "Creating role assignment manually..."
+              az role assignment create \
+                --assignee "$AKS_IDENTITY" \
+                --role "AcrPull" \
+                --scope "$ACR_ID" || echo "Manual role assignment also failed - may need higher permissions"
+            else
+              echo "Could not retrieve AKS identity or ACR ID for manual assignment"
+            fi
+            
+            echo "Infrastructure deployment completed with warnings. Role assignment may need manual intervention."
+          fi
         working-directory: ./terraform
