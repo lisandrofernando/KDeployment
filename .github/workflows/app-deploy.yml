@@ -126,5 +126,16 @@ jobs:
           echo "🔄 Restarting deployment..."
           kubectl rollout restart deployment/my-app
           echo "⏳ Waiting for rollout to complete..."
-          kubectl rollout status deployment/my-app --timeout=120s
-          echo "✅ Deployment successful!"
+          kubectl rollout status deployment/my-app --timeout=300s
+          
+          echo "📊 Checking deployment status..."
+          kubectl get deployment my-app
+          kubectl get pods -l app=my-app
+          
+          echo "🔍 Checking pod logs for any issues..."
+          kubectl logs -l app=my-app --tail=50 || echo "No logs available yet"
+          
+          echo "📋 Describing pods for troubleshooting..."
+          kubectl describe pods -l app=my-app
+          
+          echo "✅ Deployment verification complete!"
