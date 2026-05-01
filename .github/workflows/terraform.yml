@@ -66,6 +66,11 @@ jobs:
         run: terraform validate
         working-directory: ./terraform
 
+      - name: Import existing Resource Group
+        run: |
+          terraform import azurerm_resource_group.rg /subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ secrets.TF_RESOURCE_GROUP_NAME }} || true
+        working-directory: ./terraform
+
       - name: Terraform Plan
         run: |
           terraform plan \
